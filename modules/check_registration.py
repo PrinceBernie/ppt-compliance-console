@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import datetime
 from utils.data_cleaning import concat_name, normalize_text
 from utils.matching import find_member_match
+from utils.file_loader import load_cached_member_dump
 from components.file_uploader import upload_file, display_dataframe_preview, download_button
 import config
 
@@ -60,6 +61,30 @@ def run_check_registration():
     
     st.markdown("---")
     
+    # Load cached member dump
+    st.subheader("👥 Member Dump (Cached)")
+    try:
+        member_dump_df = load_cached_member_dump()
+        st.success(f"✅ Loaded cached member dump: {len(member_dump_df):,} records")
+        
+        # Show basic info
+        with st.expander("📊 Member Dump Info"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Records", f"{len(member_dump_df):,}")
+            with col2:
+                st.metric("Total Columns", len(member_dump_df.columns))
+            with col3:
+                scheme_col = config.MEMBER_DUMP_COLUMNS['scheme_name']
+                unique_schemes = member_dump_df[scheme_col].nunique()
+                st.metric("Unique Schemes", unique_schemes)
+    except Exception as e:
+        st.error(f"❌ Error loading cached member dump: {str(e)}")
+        st.info("💡 Please ensure Members.xlsx is placed in the 'files' directory.")
+        return
+    
+    st.markdown("---")
+    
     # File uploads
     col1, col2 = st.columns(2)
     
@@ -79,24 +104,27 @@ def run_check_registration():
         )
     
     with col2:
-        st.subheader("👥 Member Dump")
-        member_dump_df = upload_file(
-            label="Upload Member Dump",
-            key="member_dump_upload",
-            help_text="Excel or CSV file with system member data (will be cached)",
-            required_columns=[
-                config.MEMBER_DUMP_COLUMNS['first_name'],
-                config.MEMBER_DUMP_COLUMNS['scheme_name'],
-                config.MEMBER_DUMP_COLUMNS['mobile'],
-                config.MEMBER_DUMP_COLUMNS['ssnit'],
-                config.MEMBER_DUMP_COLUMNS['id_number'],
-                config.MEMBER_DUMP_COLUMNS['group_name']
-            ]
+        st.subheader("📋 Whitelist (Optional)")
+        st.markdown("Upload a whitelist file for members with known name variations between schedule and system.")
+        
+        whitelist_df = upload_file(
+            label="Upload Whitelist File (Optional)",
+            key="whitelist_upload",
+            help_text="Excel or CSV file with pre-approved name mappings",
+            required_columns=[]  # We'll validate manually
         )
+        
+        # Validate whitelist if uploaded
+        if whitelist_df is not None:
+            from utils.file_loader import validate_whitelist_columns
+            if not validate_whitelist_columns(whitelist_df):
+                whitelist_df = None
+            else:
+                st.info(f"✅ Whitelist loaded: {len(whitelist_df):,} pre-approved mappings")
     
-    # Check if both files are uploaded
-    if suspense_df is None or member_dump_df is None:
-        st.info("👆 Please upload both files to continue")
+    # Check if suspense file is uploaded
+    if suspense_df is None:
+        st.info("👆 Please upload the suspense data file to continue")
         return
     
     st.markdown("---")
@@ -166,18 +194,20 @@ def run_check_registration():
                 'member_ssnit_col': config.MEMBER_DUMP_COLUMNS['ssnit'],
                 'member_id_col': config.MEMBER_DUMP_COLUMNS['id_number'],
                 'member_employer_col': config.MEMBER_DUMP_COLUMNS['group_name'],
+                'member_scheme_number_col': config.MEMBER_DUMP_COLUMNS['scheme_number'],
                 'threshold_contact': config.FUZZY_THRESHOLD_CONTACT_ID,
                 'threshold_id': config.FUZZY_THRESHOLD_CONTACT_ID,
                 'threshold_name_employer': config.FUZZY_THRESHOLD_NAME_EMPLOYER
             }
             
             # STEP 3: Run matching process
-            st.info("🔄 Step 3: Running three-tier matching process...")
+            st.info("🔄 Step 3: Running matching process (Whitelist + Three-tier fuzzy matching)...")
             
             # Progress tracking
             progress_bar = st.progress(0)
             status_text = st.empty()
             
+            whitelist_matches = 0
             tier1_matches = 0
             tier2_matches = 0
             tier3_matches = 0
@@ -191,8 +221,8 @@ def run_check_registration():
                 progress_bar.progress(progress)
                 status_text.text(f"Processing record {idx + 1} of {total_records:,}...")
                 
-                # Find match
-                match_result = find_member_match(row, member_df_prepared, matching_config)
+                # Find match (with optional whitelist)
+                match_result = find_member_match(row, member_df_prepared, matching_config, whitelist_df)
                 
                 if match_result:
                     matched_row = match_result['matched_row']
@@ -206,7 +236,10 @@ def run_check_registration():
                     suspense_df.at[idx, 'MATCHED NAME'] = matched_row.get('FULL_NAME', '')
                     
                     # Set match status
-                    if match_type == 'tier1':
+                    if match_type == 'whitelist':
+                        suspense_df.at[idx, 'MATCH STATUS'] = config.MATCH_STATUS['whitelist']
+                        whitelist_matches += 1
+                    elif match_type == 'tier1':
                         suspense_df.at[idx, 'MATCH STATUS'] = config.MATCH_STATUS['tier1']
                         tier1_matches += 1
                     elif match_type == 'tier2':
@@ -230,17 +263,31 @@ def run_check_registration():
             st.markdown("---")
             st.subheader("📊 Match Statistics")
             
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Tier 1 Matches", tier1_matches, help="Contact & Name matches")
-            with col2:
-                st.metric("Tier 2 Matches", tier2_matches, help="ID Number matches")
-            with col3:
-                st.metric("Tier 3 Matches", tier3_matches, help="Name & Employer matches")
-            with col4:
-                st.metric("No Matches", no_matches, delta=f"-{no_matches/total_records*100:.1f}%")
+            # Show whitelist matches if any
+            if whitelist_matches > 0:
+                col1, col2, col3, col4, col5 = st.columns(5)
+                with col1:
+                    st.metric("Whitelist Matches", whitelist_matches, help="Pre-approved name mappings")
+                with col2:
+                    st.metric("Tier 1 Matches", tier1_matches, help="Contact & Name matches")
+                with col3:
+                    st.metric("Tier 2 Matches", tier2_matches, help="ID Number matches")
+                with col4:
+                    st.metric("Tier 3 Matches", tier3_matches, help="Name & Employer matches")
+                with col5:
+                    st.metric("No Matches", no_matches, delta=f"-{no_matches/total_records*100:.1f}%")
+            else:
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Tier 1 Matches", tier1_matches, help="Contact & Name matches")
+                with col2:
+                    st.metric("Tier 2 Matches", tier2_matches, help="ID Number matches")
+                with col3:
+                    st.metric("Tier 3 Matches", tier3_matches, help="Name & Employer matches")
+                with col4:
+                    st.metric("No Matches", no_matches, delta=f"-{no_matches/total_records*100:.1f}%")
             
-            total_matches = tier1_matches + tier2_matches + tier3_matches
+            total_matches = whitelist_matches + tier1_matches + tier2_matches + tier3_matches
             match_rate = (total_matches / total_records * 100) if total_records > 0 else 0
             
             st.info(f"📈 Overall Match Rate: {match_rate:.1f}% ({total_matches:,} of {total_records:,} records)")

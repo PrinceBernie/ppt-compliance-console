@@ -65,6 +65,7 @@ BRAND_DARK_GREY = "#4A4A4A"
 
 # Match Status Messages
 MATCH_STATUS = {
+    'whitelist': 'Matched - Whitelist',
     'tier1': 'Matched - Contact & Name',
     'tier2': 'Matched - ID Number',
     'tier3': 'Matched - Name & Employer',

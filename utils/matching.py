@@ -238,22 +238,144 @@ def match_by_name_employer(
     return None
 
 
+def check_whitelist_match(
+    suspense_row: pd.Series,
+    member_df: pd.DataFrame,
+    whitelist_df: Optional[pd.DataFrame],
+    suspense_name_col: str,
+    suspense_employer_col: str,
+    member_name_col: str,
+    member_scheme_number_col: str
+) -> Optional[Dict]:
+    """
+    Check if the suspense record has a whitelisted match.
+    
+    Whitelist provides pre-approved, direct mappings for members whose names vary
+    between schedule and system. NO fuzzy matching is performed - the whitelist
+    data is used directly without verification.
+    
+    Args:
+        suspense_row: Row from suspense DataFrame
+        member_df: Member dump DataFrame (used to get full member details)
+        whitelist_df: Optional whitelist DataFrame with approved mappings
+        suspense_name_col: Name column in suspense data
+        suspense_employer_col: Employer column in suspense data
+        member_name_col: Name column in member dump
+        member_scheme_number_col: Scheme number column in member dump
+        
+    Returns:
+        Dictionary with match details or None if no whitelist match
+    """
+    if whitelist_df is None or whitelist_df.empty:
+        return None
+    
+    suspense_name = normalize_text(suspense_row.get(suspense_name_col, ""))
+    suspense_employer = normalize_text(suspense_row.get(suspense_employer_col, ""))
+    
+    if not suspense_name:
+        return None
+    
+    # Clean whitelist data for matching
+    whitelist_clean = whitelist_df.copy()
+    whitelist_clean['Schedule_Name_Clean'] = whitelist_clean['Member Name [Schedule]'].apply(normalize_text)
+    whitelist_clean['Employer_Clean'] = whitelist_clean['Current Employer'].apply(normalize_text)
+    
+    # Look for whitelist entry matching suspense name and employer
+    whitelist_matches = whitelist_clean[
+        (whitelist_clean['Schedule_Name_Clean'] == suspense_name) &
+        (whitelist_clean['Employer_Clean'] == suspense_employer)
+    ]
+    
+    if whitelist_matches.empty:
+        return None
+    
+    # Get the first whitelist match - this is our pre-approved mapping
+    whitelist_entry = whitelist_matches.iloc[0]
+    
+    # Use the scheme number from whitelist to find the member in member_df
+    # This ensures we get the complete member record with all fields
+    whitelist_scheme_number = str(whitelist_entry.get('Scheme Number', '')).strip()
+    
+    if whitelist_scheme_number:
+        # Find member by scheme number (most reliable identifier)
+        member_df_clean = member_df.copy()
+        member_df_clean['Scheme_Number_Clean'] = member_df_clean[member_scheme_number_col].astype(str).str.strip()
+        
+        member_matches = member_df_clean[
+            member_df_clean['Scheme_Number_Clean'] == whitelist_scheme_number
+        ]
+        
+        if not member_matches.empty:
+            # Found the member - return the full member record
+            matched_member = member_matches.iloc[0]
+            return {
+                'match_type': 'whitelist',
+                'matched_row': matched_member,
+                'similarity': 1.0,  # Perfect match via whitelist - no fuzzy matching
+                'match_field': 'Whitelist (Pre-approved)'
+            }
+    
+    # Fallback: If scheme number lookup fails, try by system name
+    # This still doesn't use fuzzy matching - it's exact match on normalized text
+    system_name_clean = normalize_text(whitelist_entry.get('Member Name [System]', ''))
+    
+    if system_name_clean:
+        member_df_clean = member_df.copy()
+        member_df_clean['Name_Clean'] = member_df_clean[member_name_col].apply(normalize_text)
+        
+        member_matches = member_df_clean[member_df_clean['Name_Clean'] == system_name_clean]
+        
+        if not member_matches.empty:
+            matched_member = member_matches.iloc[0]
+            return {
+                'match_type': 'whitelist',
+                'matched_row': matched_member,
+                'similarity': 1.0,  # Perfect match via whitelist - no fuzzy matching
+                'match_field': 'Whitelist (Pre-approved)'
+            }
+    
+    return None
+
+
 def find_member_match(
     suspense_row: pd.Series,
     member_df: pd.DataFrame,
-    config: Dict
+    config: Dict,
+    whitelist_df: Optional[pd.DataFrame] = None
 ) -> Optional[Dict]:
     """
-    Orchestrate three-tier fallback matching logic.
+    Orchestrate whitelist + three-tier fallback matching logic.
+    
+    Priority:
+    0. Whitelist (if provided)
+    1. Contact matching
+    2. ID matching
+    3. Name + Employer matching
     
     Args:
         suspense_row: Row from suspense DataFrame
         member_df: Member dump DataFrame
         config: Configuration dictionary with column mappings and thresholds
+        whitelist_df: Optional whitelist DataFrame for pre-approved matches
         
     Returns:
         Dictionary with match details or None if no match found
     """
+    # Priority 0: Check whitelist first
+    if whitelist_df is not None:
+        whitelist_match = check_whitelist_match(
+            suspense_row,
+            member_df,
+            whitelist_df,
+            config['suspense_name_col'],
+            config['suspense_employer_col'],
+            config['member_name_col'],
+            config['member_scheme_number_col']
+        )
+        
+        if whitelist_match:
+            return whitelist_match
+    
     # Tier 1: Contact matching
     tier1_match = match_by_contact(
         suspense_row,
