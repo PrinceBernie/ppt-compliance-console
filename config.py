@@ -63,6 +63,12 @@ BRAND_GREY = "#969696"
 BRAND_LIGHT_GREY = "#F5F5F5"
 BRAND_DARK_GREY = "#4A4A4A"
 
+# Date Settings
+MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+]
+
 # Match Status Messages
 MATCH_STATUS = {
     'whitelist': 'Matched - Whitelist',

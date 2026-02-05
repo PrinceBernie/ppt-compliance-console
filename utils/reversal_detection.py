@@ -3,6 +3,8 @@ Reversal detection and allocation dump cleaning utilities
 """
 import pandas as pd
 import re
+import difflib
+import config
 from typing import Tuple, List, Dict
 
 
@@ -99,13 +101,18 @@ def clean_reference_field(allocation_df: pd.DataFrame, reference_col: str = 'Ref
     """
     df = allocation_df.copy()
     
-    # Remove 'Payment for ' (case-insensitive)
+    # Remove 'Payment for ', 'Contribution for', etc. (case-insensitive)
+    # Handles: payment for, payments for, contribution for, contributions for
     df[reference_col + '_CLEAN'] = df[reference_col].astype(str).str.replace(
-        r'payment\s+for\s+',
+        r'(?:payment|contribution)s?\s+for\s+',
         '',
         case=False,
         regex=True
     ).str.strip()
+
+    # Apply spelling correction to the cleaned reference
+    # We apply this to the cleaned column to avoid expensive operations on full text
+    df[reference_col + '_CLEAN'] = df[reference_col + '_CLEAN'].apply(lambda x: correct_month_spelling(x))
     
     return df
 
@@ -148,3 +155,35 @@ def clean_allocation_dump(
     stats['total_records_removed'] = len(allocation_df) - len(df_cleaned)
     
     return df_cleaned, stats
+
+
+def correct_month_spelling(text: str, month_list: List[str] = None) -> str:
+    """
+    Correct misspelled month names in text using fuzzy matching.
+    
+    Args:
+        text: Input text string
+        month_list: List of correct month names
+        
+    Returns:
+        Text with corrected month names
+    """
+    if month_list is None:
+        month_list = config.MONTH_NAMES
+        
+    if pd.isna(text) or text == '':
+        return text
+        
+    text_str = str(text)
+    words = text_str.split()
+    corrected_words = []
+    
+    for word in words:
+        # Check if match found
+        matches = difflib.get_close_matches(word.title(), month_list, n=1, cutoff=0.7)
+        if matches:
+            corrected_words.append(matches[0])
+        else:
+            corrected_words.append(word)
+            
+    return ' '.join(corrected_words)
