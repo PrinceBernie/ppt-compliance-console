@@ -105,7 +105,6 @@ def run_check_registration():
     
     with col2:
         st.subheader("📋 Whitelist (Optional)")
-        st.markdown("Upload a whitelist file for members with known name variations between schedule and system.")
         
         whitelist_df = upload_file(
             label="Upload Whitelist File (Optional)",

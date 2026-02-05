@@ -17,18 +17,31 @@ st.set_page_config(**config.PAGE_CONFIG)
 # Custom CSS for modern, elevated UI with brand colors
 st.markdown("""
 <style>
-    /* Import Google Font */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    /* Import Google Fonts: Inter and Manrope */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
     
-    /* Global Styles */
+    /* Global Styles - Default to Inter */
     * {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
-    /* Main content styling with black background */
-    .main {
-        padding: 2rem;
-        background: #000000 !important;
+    /* Main content styling - minimal padding */
+    .main .block-container {
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 95% !important;
+    }
+    
+    /* Aggressive vertical spacing reduction */
+    .element-container {
+        margin-bottom: 0.25rem !important;
+    }
+    
+    /* Reduce spacing between sections */
+    [data-testid="stVerticalBlock"] > [data-testid="element-container"] {
+        margin-bottom: 0.4rem !important;
     }
     
     /* Streamlit default background override */
@@ -36,31 +49,62 @@ st.markdown("""
         background: #000000 !important;
     }
     
-    /* Headers with brand color */
+    /* Headers - minimal margins */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        line-height: 1.2 !important;
+    }
+
     h1 {
         color: #d32027 !important;
-        font-weight: 700 !important;
-        margin-bottom: 1rem !important;
+        font-weight: 800 !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.5rem !important;
         letter-spacing: -0.5px;
     }
     
     h2 {
         color: #FFFFFF !important;
-        font-weight: 600 !important;
-        margin-top: 1.5rem !important;
-        margin-bottom: 1rem !important;
+        font-weight: 700 !important;
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.35rem !important;
     }
     
     h3 {
         color: #969696 !important;
         font-weight: 600 !important;
         font-size: 1.1rem !important;
+        margin-top: 0.4rem !important;
+        margin-bottom: 0.3rem !important;
     }
     
-    /* Paragraph and text - white for visibility */
+    /* Paragraph - minimal margins */
     p, .stMarkdown, span, div {
         color: #FFFFFF !important;
     }
+    
+    p {
+        margin-bottom: 0.25rem !important;
+        line-height: 1.5 !important;
+    }
+    
+    /* Reduce horizontal rule spacing */
+    hr {
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* Reduce sidebar padding */
+    [data-testid="stSidebar"] {
+        padding-top: 1rem !important;
+    }
+    
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    
+    
     
     /* Modern Card Styling - Black cards with red accent borders */
     .stApp > div > div {
