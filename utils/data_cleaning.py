@@ -171,3 +171,45 @@ def clean_dataframe_columns(df: pd.DataFrame, column_mapping: dict) -> pd.DataFr
         df_clean[column_mapping['id_number'] + '_CLEAN'] = df_clean[column_mapping['id_number']].apply(clean_id)
     
     return df_clean
+
+
+def parse_date(value: Optional[str]) -> Optional[pd.Timestamp]:
+    """
+    Parse date from various formats, handling 'Jan 25' as Jan 2025.
+    Returns: A pandas Timestamp normalized to the 1st of the month, or None.
+    """
+    if pd.isna(value) or str(value).strip() == '':
+        return None
+        
+    s = str(value).strip()
+    
+    # Handle "Jan 25" or "Jan-25" (Month YY)
+    # Regex for 3+ letters, space/dash, 2 digits
+    match = re.match(r'^([A-Za-z]{3,})[\s-]?(\d{2})$', s)
+    if match:
+        month_str, year_str = match.groups()
+        try:
+            # Assume 20xx for now as this is current suspense data
+            return pd.to_datetime(f"{month_str} 20{year_str}").replace(day=1)
+        except:
+            pass
+            
+    # Try standard pandas parsing
+    try:
+        dt = pd.to_datetime(s, errors='coerce')
+        if pd.notna(dt):
+            # If the year is very small (e.g. 0025), it might be valid in some contexts but not here
+            # But pd.to_datetime often fails on year 25 out of bounds, so we catch exception usually.
+            # However, if it parsed "Jan 25" as Jan 25th current year, we might want to be careful.
+            # But the user said "Jan 25" = "01/01/2025".
+            
+            # If input was "Jan 25" and pd.to_datetime returns Jan 25th 2026 (current year),
+            # that is WRONG for the user's intent (Jan 2025).
+            # The regex above should catch "Jan 25" first.
+            
+            return dt.replace(day=1)
+    except:
+        pass
+        
+    return None
+

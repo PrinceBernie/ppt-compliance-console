@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from utils.reversal_detection import clean_allocation_dump
-from utils.data_cleaning import normalize_text
+from utils.data_cleaning import normalize_text, parse_date
 from components.file_uploader import upload_file, display_dataframe_preview, download_button
 import config
 
@@ -135,6 +135,9 @@ def run_check_credits():
             
             total_records = len(suspense_df)
             
+            # Optimization: Pre-calculate allocation dates before loop
+            scheme_filtered['Reference_DATE'] = scheme_filtered['Reference_CLEAN'].apply(parse_date)
+            
             for idx, row in suspense_df.iterrows():
                 # Update progress
                 progress = (idx + 1) / total_records
@@ -159,12 +162,17 @@ def run_check_credits():
                     continue
                 
                 # Normalize contribution month for matching
-                contribution_month_clean = normalize_text(str(contribution_month))
+                contribution_month_clean = parse_date(contribution_month)
                 
-                # Search for matching allocation
+                if contribution_month_clean is None:
+                    suspense_df.at[idx, 'CREDIT STATUS'] = 'Invalid Date Format'
+                    not_credited += 1
+                    continue
+                
+                # Search for matching allocation - Dates are pre-calculated
                 matching_allocations = scheme_filtered[
                     (scheme_filtered[config.ALLOCATION_DUMP_COLUMNS['scheme_number']].astype(str) == str(scheme_number)) &
-                    (scheme_filtered['Reference_CLEAN'].str.lower().str.contains(contribution_month_clean, na=False))
+                    (scheme_filtered['Reference_DATE'] == contribution_month_clean)
                 ]
                 
                 if not matching_allocations.empty:
