@@ -7,6 +7,7 @@ from components.sidebar import render_sidebar
 from modules.home import run_home
 from modules.check_registration import run_check_registration
 from modules.check_credits import run_check_credits
+from modules.surcharges import run_surcharges
 from modules.analytics import run_analytics
 import config
 
@@ -473,6 +474,8 @@ def main():
         run_check_registration()
     elif selected_page == "Check Credits":
         run_check_credits()
+    elif selected_page == "Surcharges":
+        run_surcharges()
     elif selected_page == "Analytics":
         run_analytics()
     else:

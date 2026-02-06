@@ -25,13 +25,14 @@ def run_home():
     st.info("""
     1.  **Check Registration:** Upload suspense data & member dump to identify registered members.
     2.  **Check Credits:** Use the processed file & allocation dump to verify credit status.
+    3.  **Surcharges:** Calculate penalties for defaulters based on contribution amounts and months outstanding.
     """)
 
     st.markdown("### 📚 Documentation & Reference")
 
     # 2. Workflow (Expandable)
-    with st.expander("🔄 How it Works: Two-Step Workflow", expanded=False):
-        col1, col2 = st.columns(2)
+    with st.expander("🔄 How it Works: Three-Step Workflow", expanded=False):
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             st.markdown(icon_html("file-check", "Step 1: Check Registration", color=None), unsafe_allow_html=True)
@@ -46,11 +47,18 @@ def run_home():
             st.markdown("- **Input:** Processed Suspense Data + Allocation Dump")
             st.markdown("- **Logic:** Matches Scheme Number + Contribution Month.")
             st.markdown("- **Output:** Final report flagging 'Already Credited' members.")
+        
+        with col3:
+            st.markdown(icon_html("calculator", "Step 3: Surcharges", color=None), unsafe_allow_html=True)
+            st.markdown("**Goal:** Calculate penalties for defaulters.")
+            st.markdown("- **Input:** Defaulters Data with Amounts + Months")
+            st.markdown("- **Logic:** 3% monthly compound surcharge (2 methods available).")
+            st.markdown("- **Output:** Report with calculated surcharges and total amounts due.")
 
     # 3. Data Requirements (Expandable)
     with st.expander("📋 Data & File Requirements", expanded=False):
         st.markdown(icon_html("file-check", "Required Columns"), unsafe_allow_html=True) 
-        col_req1, col_req2, col_req3 = st.columns(3)
+        col_req1, col_req2, col_req3, col_req4 = st.columns(4)
         
         with col_req1:
             st.markdown("**Suspense Data**")
@@ -90,6 +98,18 @@ Reference
 [Contribution]
 [Withdrawal]
             """, language="text")
+        
+        with col_req4:
+            st.markdown("**Defaulters Data**")
+            st.code("""
+Contribution Amount
+Number of Months
+
+[Optional:]
+Member Name
+Scheme Number
+Employer
+            """, language="text")
         st.caption("*Columns in [brackets] are optional but headers must exist.*")
 
     # 4. Technical Details (Expandable)
@@ -105,6 +125,14 @@ Reference
         st.markdown("- **Date Standardization:** 'Jan 25' matches 'January 2025'.")
         st.markdown("- **Reversals:** Transactions with batch numbers ending in `/1` are removed (along with original).")
         st.markdown("- **Withdrawals:** Rows with 'withdrawal' in Reference are ignored.")
+        
+        st.divider()
+        
+        st.markdown(icon_html("calculator", "3. Surcharge Calculation"), unsafe_allow_html=True)
+        st.markdown("- **Rate:** 3% monthly compound surcharge.")
+        st.markdown("- **OPS Method:** For same monthly contributions - compounds total running balance.")
+        st.markdown("- **Different Method:** For varying contributions - calculates each period independently.")
+        st.markdown("- **Output Currency:** All amounts displayed in GHS.")
 
     # 5. Support (Expandable)
     with st.expander("❓ Help & Support", expanded=False):
